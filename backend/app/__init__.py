@@ -1,4 +1,6 @@
-from flask import Flask
+from pathlib import Path
+
+from flask import Flask, send_from_directory
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from .config import Config
@@ -6,7 +8,8 @@ from .config import Config
 jwt = JWTManager()
 
 def create_app():
-    app = Flask(__name__)
+    frontend_dist = Path(__file__).resolve().parents[2] / 'frontend' / 'dist'
+    app = Flask(__name__, static_folder=None)
     app.config.from_object(Config)
 
     CORS(app, origins=Config.CORS_ORIGINS, supports_credentials=True)
@@ -28,5 +31,21 @@ def create_app():
     @app.route('/api/health')
     def health():
         return {'status': 'LogiSphere API running'}, 200
+
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
+        if path.startswith('api/'):
+            return {'error': 'Not found'}, 404
+
+        requested = frontend_dist / path
+        if path and requested.is_file():
+            return send_from_directory(frontend_dist, path)
+
+        index_file = frontend_dist / 'index.html'
+        if index_file.is_file():
+            return send_from_directory(frontend_dist, 'index.html')
+
+        return {'error': 'Frontend build not found. Run npm ci && npm run build in frontend.'}, 404
 
     return app
